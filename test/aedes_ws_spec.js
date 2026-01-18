@@ -2,7 +2,7 @@
 /* eslint no-console: ["error", { allow: ["warn", "error"] }] */
 const helper = require('node-red-node-test-helper');
 const aedesNode = require('../aedes.js');
-const mqttNode = require('../node_modules/node-red/node_modules/@node-red/nodes/core/network/10-mqtt.js');
+const mqttNode = require('../node_modules/@node-red/nodes/core/network/10-mqtt.js');
 const mqtt = require('mqtt');
 
 helper.init(require.resolve('node-red'));
@@ -41,13 +41,13 @@ describe('Aedes Broker Websocket tests', function () {
         ]
       }
     ],
-    function () {
-      const n1 = helper.getNode('n1');
-      n1.should.have.property('name', 'Aedes 1883');
-      const n11 = helper.getNode('n11');
-      n11.should.have.property('name', 'Aedes 1884');
-      done();
-    });
+      function () {
+        const n1 = helper.getNode('n1');
+        n1.should.have.property('name', 'Aedes 1883');
+        const n11 = helper.getNode('n11');
+        n11.should.have.property('name', 'Aedes 1884');
+        done();
+      });
   });
 
   it('a subscriber should receive a message from an external ws publisher', function (done) {

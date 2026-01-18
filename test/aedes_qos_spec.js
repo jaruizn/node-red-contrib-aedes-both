@@ -2,7 +2,7 @@
 /* eslint no-console: ["error", { allow: ["warn", "error"] }] */
 const helper = require('node-red-node-test-helper');
 const aedesNode = require('../aedes.js');
-const mqttNode = require('../node_modules/node-red/node_modules/@node-red/nodes/core/network/10-mqtt.js');
+const mqttNode = require('../node_modules/@node-red/nodes/core/network/10-mqtt.js');
 const mqtt = require('mqtt');
 const should = require('should');
 

@@ -17,8 +17,6 @@
 module.exports = function (RED) {
   'use strict';
   const MongoPersistence = require('aedes-persistence-mongodb');
-  // const { Level } = require('level');
-  // const LevelPersistence = require('aedes-persistence-level');
   const aedes = require('aedes');
   const fs = require('fs');
   const net = require('net');
@@ -37,27 +35,43 @@ module.exports = function (RED) {
    * @param {Object} socket - The socket object.
    * @param {Object} head - The head object.
    */
-  function handleServerUpgrade (request, socket, head) {
+  function handleServerUpgrade(request, socket, head) {
     const pathname = new URL(request.url, 'http://example.org').pathname;
     if (Object.prototype.hasOwnProperty.call(listenerNodes, pathname)) {
-      listenerNodes[pathname].server.handleUpgrade(
+      listenerNodes[pathname].ws_server.handleUpgrade(
         request,
         socket,
         head,
-        function done (conn) {
-          listenerNodes[pathname].server.emit('connection', conn, request);
+        function done(conn) {
+          listenerNodes[pathname].ws_server.emit('connection', conn, request);
         }
       );
     }
   }
 
-  function AedesBrokerNode (config) {
+  function AedesBrokerNode(config) {
     RED.nodes.createNode(this, config);
+
+    this.usetls = config.usetls;
+    if (typeof this.usetls === 'undefined') {
+      this.usetls = false;
+    }
+
+    this.mqtt_enabled = typeof config.mqtt_enabled === 'undefined' ? !this.usetls : config.mqtt_enabled;
+    this.mqtts_enabled = typeof config.mqtts_enabled === 'undefined' ? !!this.usetls : config.mqtts_enabled;
     this.mqtt_port = parseInt(config.mqtt_port, 10);
+    this.mqtt_port_ssl = parseInt(config.mqtt_port_ssl, 10) || 8883;
+
+    // Compatibility fix for old config where mqtt_port could be the SSL port
+    if (typeof config.mqtt_enabled === 'undefined' && this.usetls) {
+      this.mqtt_port_ssl = this.mqtt_port;
+      this.mqtt_port = 1883;
+    }
+
     this.mqtt_ws_port = parseInt(config.mqtt_ws_port, 10);
+    this.mqtt_ws_port_ssl = parseInt(config.mqtt_ws_port_ssl, 10);
     this.mqtt_ws_path = '' + config.mqtt_ws_path;
     this.mqtt_ws_bind = config.mqtt_ws_bind;
-    this.usetls = config.usetls;
 
     const certPath = config.cert ? config.cert.trim() : '';
     const keyPath = config.key ? config.key.trim() : '';
@@ -68,6 +82,7 @@ module.exports = function (RED) {
 
     if (this.mqtt_ws_bind === 'path') {
       this.mqtt_ws_port = 0;
+      this.mqtt_ws_port_ssl = 0;
     } else {
       this.mqtt_ws_path = '';
     }
@@ -105,10 +120,6 @@ module.exports = function (RED) {
       this.password = this.credentials.password;
     }
 
-    if (typeof this.usetls === 'undefined') {
-      this.usetls = false;
-    }
-
     const node = this;
 
     const aedesSettings = {};
@@ -119,73 +130,93 @@ module.exports = function (RED) {
         url: config.dburl
       });
       node.log('Start persistence to MongeDB');
-      /*
-    } else if (config.persistence_bind === 'level') {
-      aedesSettings.persistence = LevelPersistence(new Level('leveldb'));
-      node.log('Start persistence to LevelDB');
-      */
     }
 
-    if (this.cert && this.key && this.usetls) {
+    if (this.cert && this.key && (this.usetls || this.mqtts_enabled || this.mqtt_ws_port_ssl)) {
       serverOptions.cert = this.cert;
       serverOptions.key = this.key;
       serverOptions.ca = this.ca;
     }
 
     const broker = aedes.createBroker(aedesSettings);
-    let server;
-    if (this.usetls) {
-      server = tls.createServer(serverOptions, broker.handle);
-    } else {
-      server = net.createServer(broker.handle);
-    }
+    node.broker = broker;
+    node.servers = [];
 
-    let wss = null;
-    let httpServer = null;
-
-    if (this.mqtt_ws_port) {
-      // Awkward check since http or ws do not fire an error event in case the port is in use
-      const testServer = net.createServer();
-      testServer.once('error', function (err) {
+    function startServer(s) {
+      s.server.once('error', function (err) {
         if (err.code === 'EADDRINUSE') {
-          node.error(
-            'Error: Port ' + config.mqtt_ws_port + ' is already in use'
-          );
+          node.error('Error: Port ' + s.port + ' (' + s.type + ') is already in use');
         } else {
-          node.error(
-            'Error creating net server on port ' +
-              config.mqtt_ws_port +
-              ', ' +
-              err.toString()
-          );
+          node.error('Error: Port ' + s.port + ' (' + s.type + ') ' + err.toString());
         }
-      });
-      testServer.once('listening', function () {
-        testServer.close();
+        node.status({ fill: 'red', shape: 'ring', text: 'node-red:common.status.disconnected' });
       });
 
-      testServer.once('close', function () {
-        if (node.usetls) {
-          httpServer = https.createServer(serverOptions);
-        } else {
-          httpServer = http.createServer();
-        }
-        wss = ws.createServer(
-          {
-            server: httpServer
-          },
-          broker.handle
-        );
-        httpServer.listen(config.mqtt_ws_port, function () {
-          node.log(
-            'Binding aedes mqtt server on ws port: ' + config.mqtt_ws_port
-          );
-        });
-      });
-      testServer.listen(config.mqtt_ws_port, function () {
-        node.log('Checking ws port: ' + config.mqtt_ws_port);
+      s.server.listen(s.port, function () {
+        node.log('Binding aedes ' + s.type + ' server on port: ' + s.port);
+        node.status({ fill: 'green', shape: 'dot', text: 'node-red:common.status.connected' });
       });
     }
+
+    setImmediate(() => {
+      // MQTT Server
+      if (node.mqtt_enabled && node.mqtt_port) {
+        const server = net.createServer(broker.handle);
+        const s = { server, port: node.mqtt_port, type: 'mqtt' };
+        node.servers.push(s);
+        startServer(s);
+      }
+
+      // MQTTS Server
+      if (node.mqtts_enabled && node.mqtt_port_ssl && node.cert && node.key) {
+        const server = tls.createServer(serverOptions, broker.handle);
+        const s = { server, port: node.mqtt_port_ssl, type: 'mqtts' };
+        node.servers.push(s);
+        startServer(s);
+      }
+
+      // WS Server (HTTP) logic with probe
+      if (node.mqtt_ws_port) {
+        const testServer = net.createServer();
+        testServer.once('error', function (err) {
+          if (err.code === 'EADDRINUSE') {
+            node.error('Error: Port ' + node.mqtt_ws_port + ' (ws) is already in use');
+          } else {
+            node.error('Error creating probe server on port ' + node.mqtt_ws_port + ', ' + err.toString());
+          }
+        });
+        testServer.once('listening', function () { testServer.close(); });
+        testServer.once('close', function () {
+          const httpServer = http.createServer();
+          const wss = ws.createServer({ server: httpServer }, broker.handle);
+          const s = { server: httpServer, wss, port: node.mqtt_ws_port, type: 'ws' };
+          node.servers.push(s);
+          startServer(s);
+        });
+        testServer.listen(node.mqtt_ws_port);
+      }
+
+      // WSS Server (HTTPS) logic with probe
+      if (node.mqtt_ws_port_ssl && node.cert && node.key) {
+        const testServer = net.createServer();
+        testServer.once('error', function (err) {
+          if (err.code === 'EADDRINUSE') {
+            node.error('Error: Port ' + node.mqtt_ws_port_ssl + ' (wss) is already in use');
+          } else {
+            node.error('Error creating probe server on port ' + node.mqtt_ws_port_ssl + ', ' + err.toString());
+          }
+        });
+        testServer.once('listening', function () { testServer.close(); });
+        testServer.once('close', function () {
+          const httpsServer = https.createServer(serverOptions);
+          const wss = ws.createServer({ server: httpsServer }, broker.handle);
+          const s = { server: httpsServer, wss, port: node.mqtt_ws_port_ssl, type: 'wss' };
+          node.servers.push(s);
+          startServer(s);
+        });
+        testServer.listen(node.mqtt_ws_port_ssl);
+      }
+    });
 
     if (this.mqtt_ws_path !== '') {
       if (!serverUpgradeAdded) {
@@ -209,14 +240,8 @@ module.exports = function (RED) {
         return;
       }
       listenerNodes[node.fullPath] = node;
-      const serverOptions_ = {
-        noServer: true
-      };
-      if (RED.settings.webSocketNodeVerifyClient) {
-        serverOptions_.verifyClient = RED.settings.webSocketNodeVerifyClient;
-      }
 
-      node.server = ws.createServer(
+      node.ws_server = ws.createServer(
         {
           noServer: true
         },
@@ -224,35 +249,6 @@ module.exports = function (RED) {
       );
 
       node.log('Binding aedes mqtt server on ws path: ' + node.fullPath);
-    }
-
-    server.once('error', function (err) {
-      if (err.code === 'EADDRINUSE') {
-        node.error('Error: Port ' + config.mqtt_port + ' is already in use');
-        node.status({
-          fill: 'red',
-          shape: 'ring',
-          text: 'node-red:common.status.disconnected'
-        });
-      } else {
-        node.error('Error: Port ' + config.mqtt_port + ' ' + err.toString());
-        node.status({
-          fill: 'red',
-          shape: 'ring',
-          text: 'node-red:common.status.disconnected'
-        });
-      }
-    });
-
-    if (this.mqtt_port) {
-      server.listen(this.mqtt_port, function () {
-        node.log('Binding aedes mqtt server on port: ' + config.mqtt_port);
-        node.status({
-          fill: 'green',
-          shape: 'dot',
-          text: 'node-red:common.status.connected'
-        });
-      });
     }
 
     if (this.credentials && this.username && this.password) {
@@ -408,46 +404,42 @@ module.exports = function (RED) {
     });
 
     this.on('close', function (done) {
-      process.nextTick(function onCloseDelayed () {
-        function wsClose () {
-          if (wss) {
-            node.log(
-              'Unbinding aedes mqtt server from ws port: ' + config.mqtt_ws_port
-            );
-            wss.close(function () {
-              node.debug('after wss.close(): ');
-              httpServer.close(function () {
-                node.debug('after httpServer.close(): ');
-                done();
-              });
-            });
-          } else {
-            done();
-          }
-        }
+      node.log('Closing Aedes broker and servers...');
+      const serversToClose = [...node.servers];
+      if (node.mqtt_ws_path !== '' && node.ws_server) {
+        serversToClose.push({ server: node.ws_server, type: 'ws-path' });
+      }
 
-        function brokerClose () {
-          broker.close(function () {
-            node.log(
-              'Unbinding aedes mqtt server from port: ' + config.mqtt_port
-            );
-            server.close(function () {
-              node.debug('after server.close(): ');
-              if (node.mqtt_ws_path !== '') {
-                node.log(
-                  'Unbinding aedes mqtt server from ws path: ' + node.fullPath
-                );
-                delete listenerNodes[node.fullPath];
-                node.server.close(function () {
-                  wsClose();
-                });
-              } else {
-                wsClose();
-              }
-            });
-          });
+      let closeCount = serversToClose.length + 1; // servers + broker
+      let doneCalled = false;
+      function checkDone() {
+        closeCount--;
+        if (closeCount <= 0 && !doneCalled) {
+          doneCalled = true;
+          node.log('All servers and broker closed');
+          done();
         }
-        brokerClose();
+      }
+
+      // Timeout safety
+      setTimeout(() => {
+        if (!doneCalled) {
+          node.warn('Aedes close timed out, forcing done');
+          doneCalled = true;
+          done();
+        }
+      }, 5000);
+
+      broker.close(checkDone);
+      serversToClose.forEach(s => {
+        node.log('Closing ' + s.type + ' server');
+        if (s.wss) {
+          s.wss.close(function () {
+            s.server.close(checkDone);
+          });
+        } else {
+          s.server.close(checkDone);
+        }
       });
     });
   }

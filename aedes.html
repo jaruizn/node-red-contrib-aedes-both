@@ -25,10 +25,20 @@
   <div id="node-config-aedes-broker-tabs-content" style="min-height:150px;">
       <div id="aedes-broker-tab-connection" style="display:none">
           <div class="form-row">
-              <label for="node-input-mqtt_port"><i class="fa fa-globe"></i> <span
-                      data-i18n="aedes-mqtt-broker.label.mqtt_port"></span></label>
-              <input type="text" id="node-input-mqtt_port"
-                  data-i18n="[placeholder]aedes-mqtt-broker.placeholder.mqtt_port">
+              <input type="checkbox" id="node-input-mqtt_enabled" style="display: inline-block; width: auto; vertical-align: top;">
+              <label for="node-input-mqtt_enabled" style="width: auto" data-i18n="aedes-mqtt-broker.label.use-mqtt"></label>
+              <div id="node-input-mqtt-row" style="display: inline-block; margin-left: 20px;">
+                  <label for="node-input-mqtt_port" style="width: auto"><i class="fa fa-globe"></i> <span data-i18n="aedes-mqtt-broker.label.mqtt_port"></span></label>
+                  <input type="text" id="node-input-mqtt_port" style="width: 100px" data-i18n="[placeholder]aedes-mqtt-broker.placeholder.mqtt_port">
+              </div>
+          </div>
+          <div class="form-row">
+              <input type="checkbox" id="node-input-mqtts_enabled" style="display: inline-block; width: auto; vertical-align: top;">
+              <label for="node-input-mqtts_enabled" style="width: auto" data-i18n="aedes-mqtt-broker.label.use-mqtts"></label>
+              <div id="node-input-mqtts-row" style="display: inline-block; margin-left: 20px;">
+                  <label for="node-input-mqtt_port_ssl" style="width: auto"><i class="fa fa-globe"></i> <span data-i18n="aedes-mqtt-broker.label.mqtt_port_ssl"></span></label>
+                  <input type="text" id="node-input-mqtt_port_ssl" style="width: 100px" data-i18n="[placeholder]aedes-mqtt-broker.placeholder.mqtt_port">
+              </div>
           </div>
           <div class="form-row">
               <label for="node-input-mqtt_ws_bind"><i class="fa fa-globe"></i> WS bind</label>
@@ -49,11 +59,18 @@
               <input type="text" id="node-input-mqtt_ws_port"
                   data-i18n="[placeholder]aedes-mqtt-broker.placeholder.mqtt_ws_port">
           </div>
+          <div class="form-row" id="node-input-mqtt_ws_port_ssl-label">
+              <label for="node-input-mqtt_ws_port_ssl"><i class="fa fa-globe"></i> <span
+                      data-i18n="aedes-mqtt-broker.label.mqtt_ws_port_ssl"></label>
+              <input type="text" id="node-input-mqtt_ws_port_ssl"
+                  data-i18n="[placeholder]aedes-mqtt-broker.placeholder.mqtt_ws_port">
+          </div>
           <div class="form-row">
               <input type="checkbox" id="node-input-usetls"
                   style="display: inline-block; width: auto; vertical-align: top;">
               <label for="node-input-usetls" style="width: auto" data-i18n="aedes-mqtt-broker.label.use-tls"></label>
-              <div id="node-input-tls" class="hide">
+          </div>
+          <div id="node-input-tls-config-row" class="hide">
                   <div class="form-row" id="node-row-uselocalfiles">
                       <input type="checkbox" id="node-input-uselocalfiles"
                           style="display: inline-block; width: auto; vertical-align: top;">
@@ -157,9 +174,17 @@
     category: 'network',
     defaults: {
       name: { value: '' },
+      mqtt_enabled: { value: true },
+      mqtts_enabled: { value: false },
       mqtt_port: { value: 1883, validate: RED.validators.number() },
+      mqtt_port_ssl: {
+        value: 8883, validate: function (v) {
+          return !$('#node-input-mqtts_enabled').is(':checked') || RED.validators.number()(v);
+        }
+      },
       mqtt_ws_bind: { value: 'port', required: true },
       mqtt_ws_port: { value: null, required: false, validate: RED.validators.number(true) },
+      mqtt_ws_port_ssl: { value: null, required: false, validate: RED.validators.number(true) },
       mqtt_ws_path: { value: '', required: false },
       cert: {
         value: '',
@@ -168,7 +193,7 @@
           if (currentKey === undefined) {
             currentKey = this.key;
           }
-          return currentKey === '' || v !== '';
+          return (currentKey === '' && !$('#node-input-usetls').is(':checked')) || v !== '';
         }
       },
       key: {
@@ -178,13 +203,13 @@
           if (currentCert === undefined) {
             currentCert = this.cert;
           }
-          return currentCert === '' || v !== '';
+          return (currentCert === '' && !$('#node-input-usetls').is(':checked')) || v !== '';
         }
       },
-      ca: {value:""},
+      ca: { value: "" },
       certname: { value: '' },
       keyname: { value: '' },
-      caname: {value:""},
+      caname: { value: "" },
       persistence_bind: { value: 'memory', required: true },
       dburl: { value: '', required: false },
       usetls: { value: false }
@@ -194,7 +219,7 @@
       password: { type: 'password' },
       certdata: { type: 'text' },
       keydata: { type: 'text' },
-      cadata: {type:"text"}
+      cadata: { type: "text" }
     },
     color: '#d8bfd8',
     inputs: 0,
@@ -208,6 +233,7 @@
     },
     outputLabels: ['events', 'publish'],
     oneditprepare: function () {
+      var node = this;
       var tabs = RED.tabs.create({
         id: 'node-config-aedes-broker-tabs',
         onchange: function (tab) {
@@ -231,6 +257,36 @@
         tabs.resize();
       }, 0);
 
+      // Migraciones
+      if (typeof node.mqtt_enabled === 'undefined') {
+        if (node.usetls) {
+          $('#node-input-mqtt_enabled').prop('checked', false);
+          $('#node-input-mqtts_enabled').prop('checked', true);
+          $('#node-input-mqtt_port_ssl').val(node.mqtt_port || 8883);
+        } else {
+          $('#node-input-mqtt_enabled').prop('checked', true);
+          $('#node-input-mqtts_enabled').prop('checked', false);
+        }
+      }
+
+      function updateMQTTRows() {
+        if ($('#node-input-mqtt_enabled').is(':checked')) {
+          $('#node-input-mqtt-row').show();
+        } else {
+          $('#node-input-mqtt-row').hide();
+        }
+        if ($('#node-input-mqtts_enabled').is(':checked')) {
+          $('#node-input-mqtts-row').show();
+          $('#node-input-usetls').prop('checked', true);
+        } else {
+          $('#node-input-mqtts-row').hide();
+        }
+      }
+
+      $('#node-input-mqtt_enabled').on('change', updateMQTTRows);
+      $('#node-input-mqtts_enabled').on('change', updateMQTTRows);
+      updateMQTTRows();
+
       if (typeof this.mqtt_ws_bind === 'undefined') {
         this.mqtt_ws_bind = 'port';
         $('#node-input-mqtt_ws_bind').text('Port');
@@ -238,18 +294,22 @@
       $('#node-input-mqtt_ws_bind').on('change', function () {
         var wsPathLabel = $('#node-input-mqtt_ws_path-label');
         var wsPortLabel = $('#node-input-mqtt_ws_port-label');
+        var wssPortLabel = $('#node-input-mqtt_ws_port_ssl-label');
         switch ($(this).val()) {
           case 'path':
             wsPathLabel.show();
             wsPortLabel.hide();
+            wssPortLabel.hide();
             break;
           case 'port':
             wsPathLabel.hide();
             wsPortLabel.show();
+            wssPortLabel.show();
             break;
           default:
             wsPathLabel.hide();
             wsPortLabel.show();
+            wssPortLabel.show();
             break;
         }
       });
@@ -288,9 +348,9 @@
       }
       function updateTLSOptions() {
         if ($('#node-input-usetls').is(':checked')) {
-          $('#node-input-tls').show();
+          $('#node-input-tls-config-row').show();
         } else {
-          $('#node-input-tls').hide();
+          $('#node-input-tls-config-row').hide();
         }
       }
 
@@ -317,7 +377,7 @@
       $('#node-input-keyfile').on('change', function () {
         saveFile('key', this.files[0]);
       });
-      $("#node-input-cafile" ).on("change", function() {
+      $("#node-input-cafile").on("change", function () {
         saveFile("ca", this.files[0]);
       });
       function clearNameData(prop) {
@@ -331,7 +391,7 @@
       $('#tls-button-key-clear').on('click', function () {
         clearNameData('key');
       });
-      $("#tls-config-button-ca-clear").on("click", function() {
+      $("#tls-config-button-ca-clear").on("click", function () {
         clearNameData("ca");
       });
 
@@ -344,11 +404,11 @@
           $(".tls-input-path").hide();
         }
       }
-      $("#node-input-uselocalfiles").on("click",function() {
+      $("#node-input-uselocalfiles").on("click", function () {
         updateFileUpload();
       });
-      if(this.cert || this.key || this.ca) {
-        $("#node-input-uselocalfiles").prop('checked',true);
+      if (this.cert || this.key || this.ca) {
+        $("#node-input-uselocalfiles").prop('checked', true);
       }
       $('#tls-certname').text(this.certname);
       $('#tls-keyname').text(this.keyname);
@@ -357,16 +417,16 @@
     },
     oneditsave: function () {
       if (!$('#node-input-usetls').is(':checked')) {
-        $('#node-input-tls').val('');
+        $('#node-input-tls-config-row').val('');
       }
       if ($("#node-input-uselocalfiles").is(':checked')) {
-          clearNameData("ca");
-          clearNameData("cert");
-          clearNameData("key");
+        clearNameData("ca");
+        clearNameData("cert");
+        clearNameData("key");
       } else {
-          $("#node-input-ca").val("");
-          $("#node-input-cert").val("");
-          $("#node-input-key").val("");
+        $("#node-input-ca").val("");
+        $("#node-input-cert").val("");
+        $("#node-input-key").val("");
       }
     }
   });

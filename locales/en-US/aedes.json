@@ -5,9 +5,13 @@
       "connected_plural": "connected __count__"
     },
     "label": {
-      "mqtt_port": "MQTT port",
-      "mqtt_ws_port": "WS port",
+      "mqtt_port": "MQTT Port",
+      "mqtt_port_ssl": "MQTTS Port",
+      "mqtt_ws_port": "WS Port",
+      "mqtt_ws_port_ssl": "WSS Port",
       "mqtt_ws_path": "WS path",
+      "use-mqtt": "Enable MQTT",
+      "use-mqtts": "Enable MQTTS",
       "use-tls": "Enable secure (SSL/TLS) connection",
       "use-local-files": "Use local files",
       "tls-config": "TLS Configuration",

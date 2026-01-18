@@ -2,7 +2,7 @@
 /* eslint no-console: ["error", { allow: ["warn", "error"] }] */
 const helper = require('node-red-node-test-helper');
 const aedesNode = require('../aedes.js');
-const mqttNode = require('../node_modules/node-red/node_modules/@node-red/nodes/core/network/10-mqtt.js');
+const mqttNode = require('../node_modules/@node-red/nodes/core/network/10-mqtt.js');
 const mqtt = require('mqtt');
 
 const credentialsOK = { n1: { username: 'test', password: 'test' }, b1: { user: 'test', password: 'test' } };
@@ -67,13 +67,13 @@ describe('Aedes Broker TCP tests', function () {
         port: '1883'
       }
     ],
-    function () {
-      const n2 = helper.getNode('n2');
-      n2.on('input', function (msg) {
-        msg.should.have.property('topic', 'clientReady');
-        done();
+      function () {
+        const n2 = helper.getNode('n2');
+        n2.on('input', function (msg) {
+          msg.should.have.property('topic', 'clientReady');
+          done();
+        });
       });
-    });
   });
 
   it('should not connect an mqtt client with missing authentication', function (done) {
@@ -197,20 +197,20 @@ describe('Aedes Broker TCP tests', function () {
         port: '1883'
       }
     ],
-    function () {
-      const n2 = helper.getNode('n2');
-      const n3 = helper.getNode('n3');
-      const n5 = helper.getNode('n5');
-      n2.on('input', function (msg) {
-        if (msg.topic === 'subscribe') {
-          n3.receive({ payload: 'test' });
-        }
+      function () {
+        const n2 = helper.getNode('n2');
+        const n3 = helper.getNode('n3');
+        const n5 = helper.getNode('n5');
+        n2.on('input', function (msg) {
+          if (msg.topic === 'subscribe') {
+            n3.receive({ payload: 'test' });
+          }
+        });
+        n5.on('input', function (msg) {
+          msg.should.have.property('topic', 'test1883');
+          done();
+        });
       });
-      n5.on('input', function (msg) {
-        msg.should.have.property('topic', 'test1883');
-        done();
-      });
-    });
   });
 
   it('should connect 2 mqtt clients on 2 servers', function (done) {
@@ -266,25 +266,25 @@ describe('Aedes Broker TCP tests', function () {
         port: '1884'
       }
     ],
-    function () {
-      let i = 0;
-      const n2 = helper.getNode('n2');
-      n2.on('input', function (msg) {
-        msg.should.have.property('topic', 'clientReady');
-        i++;
-        if (i === 2) {
-          done();
-        }
+      function () {
+        let i = 0;
+        const n2 = helper.getNode('n2');
+        n2.on('input', function (msg) {
+          msg.should.have.property('topic', 'clientReady');
+          i++;
+          if (i === 2) {
+            done();
+          }
+        });
+        const n12 = helper.getNode('n12');
+        n12.on('input', function (msg) {
+          msg.should.have.property('topic', 'clientReady');
+          i++;
+          if (i === 2) {
+            done();
+          }
+        });
       });
-      const n12 = helper.getNode('n12');
-      n12.on('input', function (msg) {
-        msg.should.have.property('topic', 'clientReady');
-        i++;
-        if (i === 2) {
-          done();
-        }
-      });
-    });
   });
 
   it('should not throw an exception with 2 servers on the same mqtt port', function (done) {
@@ -309,13 +309,13 @@ describe('Aedes Broker TCP tests', function () {
         ]
       }
     ],
-    function () {
-      const n1 = helper.getNode('n1');
-      n1.should.have.property('name', 'Aedes 1883');
-      const n11 = helper.getNode('n11');
-      n11.should.have.property('name', 'Aedes 1883 2');
-      done();
-    });
+      function () {
+        const n1 = helper.getNode('n1');
+        n1.should.have.property('name', 'Aedes 1883');
+        const n11 = helper.getNode('n11');
+        n11.should.have.property('name', 'Aedes 1883 2');
+        done();
+      });
   });
 
   it('should connect an external mqtt client', function (done) {

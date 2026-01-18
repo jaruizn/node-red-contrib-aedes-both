@@ -3,15 +3,15 @@ MQTT Broker for Node-RED based on [Aedes](https://github.com/moscajs/aedes).
 
 You can use the MQTT protocol in Node-RED without an external MQTT broker like Mosquitto.
 
-![Node.js CI](https://github.com/martin-doyle/node-red-contrib-aedes/workflows/Node.js%20CI/badge.svg)
+![Node.js CI](https://github.com/jaruizn/node-red-contrib-aedes-both/workflows/Node.js%20CI/badge.svg)
 [![js-semistandard-style](https://img.shields.io/badge/code%20style-semistandard-brightgreen.svg?style=flat-square)](https://github.com/standard/semistandard)
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/898bf62b040a4d999b150487e9cc837b)](https://www.codacy.com/manual/martin-doyle/node-red-contrib-aedes?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=martin-doyle/node-red-contrib-aedes&amp;utm_campaign=Badge_Grade)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/898bf62b040a4d999b150487e9cc837b)](https://www.codacy.com/manual/jaruizn/node-red-contrib-aedes-both?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=jaruizn/node-red-contrib-aedes-both&amp;utm_campaign=Badge_Grade)
 <!--
-[![Dependency Status](https://david-dm.org/martin-doyle/node-red-contrib-aedes.svg)](https://david-dm.org/martin-doyle/node-red-contrib-aedes)
-[![devDependency Status](https://david-dm.org/martin-doyle/node-red-contrib-aedes/dev-status.svg)](https://david-dm.org/martin-doyle/node-red-contrib-aedes#info=devDependencies)
+[![Dependency Status](https://david-dm.org/jaruizn/node-red-contrib-aedes-both.svg)](https://david-dm.org/jaruizn/node-red-contrib-aedes-both)
+[![devDependency Status](https://david-dm.org/jaruizn/node-red-contrib-aedes-both/dev-status.svg)](https://david-dm.org/jaruizn/node-red-contrib-aedes-both#info=devDependencies)
 -->
 [![Open Source Love](https://badges.frapsoft.com/os/mit/mit.svg?v=102)](https://github.com/ellerbrock/open-source-badge/)
-[![NPM version](https://img.shields.io/npm/v/node-red-contrib-aedes.svg?style=flat)](https://www.npmjs.com/node-red-contrib-aedes)
+[![NPM version](https://img.shields.io/npm/v/node-red-contrib-aedes-both.svg?style=flat)](https://www.npmjs.com/node-red-contrib-aedes-both)
 
 ## Background
 This node was created because the original MQTT broker [node-red-contrib-mqtt-broker](https://github.com/zuhito/node-red-contrib-mqtt-broker) uses [mosca](https://github.com/moscajs/mosca) which is no longer maintained.
@@ -27,9 +27,9 @@ Just put this node on Node-RED and hit the deploy button. The MQTT Broker will r
 ![flows](./flows.png)
 
 ## Features
-- Standard TCP Support
+- Simultaneous MQTT & MQTTS (SSL/TLS) Support
+- Simultaneous WebSocket (WS) & Secure WebSocket (WSS) Support
 - WebSocket Support via port or path
-- SSL / TLS
 - Message Persistence (In-memory, LevelDB or MongoDB)
  
 For more information see [Aedes](https://github.com/moscajs/aedes/blob/master/README.md#features).
